@@ -36,8 +36,8 @@ DNS温泉番外編2にて発表できなかったBINDのメモリリーク脆弱
 しかし実際にこの脆弱性を利用してサービスを妨害することは容易ではありません。
 数個のDNSクエリ程度ではサーバ上のメモリを使い切らせることはできず、対象のサーバのメモリ容量と同程度のDNSメッセージを送信する必要があります。
 いわゆる”BINDころり”と呼ばれるパケットひとつでサービスを止めることはできず、パケットをばらまくことによる無差別攻撃は不可能です。
-そして、特定のDNSサーバを対象として攻撃する場合でも、攻撃側にも大きな帯域が必要でコストが嵩み、それで得られる結果がメモリ消費によるDoSとなり
-攻撃側が得る利益が比較的小さいため、実際に利用する人は存在しないでしょう。
+そして特定のDNSサーバを対象として攻撃する場合でも、攻撃側にも大きな帯域が必要でコストが嵩み、
+それで得られる結果がメモリ消費によるDoSとなり攻撃側が得る利益が比較的小さいため、実際に利用する人は存在しないでしょう。
 
 ## 詳細(BIND 9.11.x)
 
@@ -85,13 +85,13 @@ process_keytag(ns_client_t *client, isc_buffer_t *buf, size_t optlen) {
 
 ## 対策
 
-本脆弱性の対策はBINDのバージョンアップのみで、回避策などはありません。
+本脆弱性の対策はBINDのバージョンアップのみで、回避策はありません。
 
 ## 経緯
 
-本脆弱性の対応の経緯は以下の通りです。当初はこの脆弱性についてJANOG 43のライトニングトークで発表しようと
-準備していましたが、脆弱性公表が遅れ申し込むことはできませんでした。次にDNS温泉番外編での発表を準備しましたが、
-さらに脆弱性公表が遅れ発表できませんでした。[DNS温泉の発表資料にある"CVE-次作をお楽しみに"](https://speakerdeck.com/sischkg/dns-fullresolver-onsen?slide=2)
+本脆弱性の対応の経緯は以下の通りです。当初はこの脆弱性についてJANOG 43のライトニングトークで発表しようと準備していましたが、
+脆弱性公表が遅れ申し込むことはできませんでした。次にDNS温泉番外編での発表を準備しましたが、
+さらに脆弱性の公表が遅れ発表できませんでした。[DNS温泉の発表資料にある"CVE-次作をお楽しみに"](https://speakerdeck.com/sischkg/dns-fullresolver-onsen?slide=2)
 は本脆弱性のことです。
 公表の遅れの原因は、本脆弱性と同時に対応しようとした別の脆弱性
 ([CVE-2018-5743: Limiting simultaneous TCP clients is ineffective](https://kb.isc.org/docs/cve-2018-5743))
@@ -100,7 +100,7 @@ process_keytag(ns_client_t *client, isc_buffer_t *buf, size_t optlen) {
 * 2018/12/09 脆弱性発見、即ISCへ報告
 * 2018/12/10 ISCから回答
   + 脆弱性を確認
-  + 年末にシステムを更新しない組織があるため、公開は1月の上、中旬の予定
+  + 年末にシステムを更新しない組織があるため、公開は1月の上中旬の予定
 * 2018/12/13 脆弱性修正?
   + [Master BranchのCHANGESに"placeholder"追加](https://gitlab.isc.org/isc-projects/bind9/commit/fed3e7a8151468faecb071e9fb6e55f2054833cb?w=1))
 * 2018/12/28 ISCより報告
@@ -125,7 +125,7 @@ process_keytag(ns_client_t *client, isc_buffer_t *buf, size_t optlen) {
 EDNSオプションで、昨年実施されたRoot KSK Rolloverの進行状況を踏査するために利用されるはずのものです。
 
 Root KSK Rolloverでは、Root Zoneを署名するためのZSKを署名する鍵であるのKSKを新規に作成し、既存のものと入れ替えます。
-その祭にDNSSEC Validator側で新しいトラストアンカー(=KSKの公開鍵)を設定する必要があります。
+その際にDNSSEC Validator側で新しいトラストアンカー(=KSKの公開鍵)を設定する必要があります。
 もしKSK Rollover前に新しいトラストアンカーを設定していなければ、そのValidatorでDNSSECの署名検証に失敗し、
 名前解決もできなくなります。そこでKSK Rolloverの実施可否の判定材料として新しいトラストアンカーの設定の状況を観測するために、
 [RFC8145 Signaling Trust Anchor Knowledge in DNS Security Extensions (DNSSEC)](https://tools.ietf.org/html/rfc8145)
@@ -153,20 +153,22 @@ Open SourceなDNS Resolver/ValidatorのRFC 8145の実装状況は以下の通り
 
 Root KSK Rolloverの際のKey Tagの観測状況が公開されています。
 
-![60%](./images/key_tag_01.png)
+> ![60%](./images/key_tag_01.png)
 
-KSK Rollover 2015-2019(https://www.slideshare.net/apnic/ksk-rollover-20152019)
+KSK Rollover 2015-2019(https://www.slideshare.net/apnic/ksk-rollover-20152019)より
 
 しかし、結果としてあまり役に立たなかったようです。
 
-![60%](./images/key_tag_02.png)
+> ![60%](./images/key_tag_02.png)
 
-KSK Rollover 2015-2019(https://www.slideshare.net/apnic/ksk-rollover-20152019)
+KSK Rollover 2015-2019(https://www.slideshare.net/apnic/ksk-rollover-20152019)より
 
-* Signaling Trust Anchor Knowledgeは新しいvalidatorのみ実装されているため、古い実装の設定状況を観測できません。
-  + Linuxのディストリビューションのパッケージ等ではほとんど対応しておらず、対応Validatorはほとんど使用されていない可能性が高い
-  + それでも対応Validatorを利用しているのは特殊な管理者であり、古い実装者と比較しトラストアンカーを更新している可能性が高い 
-* 過去のBINDにおいてDNSSEC Validationを無効化してもKey Tagを送信していたため、本来は調査する必要のないValidatorの状況も観測されていました。
+役立たない理由は以下の通りです。
+
+* Signaling Trust Anchor Knowledgeは新しいvalidatorのみ実装されているため、古い実装の設定状況を観測できません
+  + Linuxのディストリビューションのパッケージ等ではほとんど対応しておらず、対応Validatorはほとんど使用されていない可能性が高いです
+  + それでも対応Validatorを利用しているのは特殊な管理者であり、古い実装者と比較しトラストアンカーを更新している可能性が高いです。 
+* 過去のBINDにおいてDNSSEC Validationを無効化してもKey Tagを送信していたため、本来は調査する必要のないValidatorの状況も観測されていました
   [Suppress trust-anchor-telementry queries if validation is disabled. [RT #46131]](https://gitlab.isc.org/isc-projects/bind9/commit/dc0a792d946871140bc3689d04ce7934d210544b)
   
 ## まとめ
