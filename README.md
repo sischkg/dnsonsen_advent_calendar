@@ -6,14 +6,7 @@ DNS温泉番外編2にて発表できなかったBINDのメモリリーク脆弱
 
 * CVE-2018-5744
 * ISCからのセキュリティアドバイザリ[A specially crafted packet can cause named to leak memory](https://kb.isc.org/docs/cve-2018-5744)
-* 複数のKey Tag Optionを持つDNSクエリを受信すると、メモリをリークします。
-  [Release Notes for BIND-9.11.5-P4](https://ftp.isc.org/isc/bind9/9.11.5-P4/RELEASE-NOTES-bind-9.11.5-P4.html)
-
-  > named leaked memory when processing a request with multiple Key Tag EDNS options present.
-
-* [受信したKey Tagをログへ記録する機能を追加](https://gitlab.isc.org/isc-projects/bind9/commit/b41c1aacbc550fa67bfa62df3114b1d668b9c8d8)しましたが、
-  その時にこの脆弱性も追加されました。
-
+* 複数のKey Tag Optionを持つDNSクエリを受信すると、メモリをリークします
 * 悪用は困難
 
 ## 脆弱性の対象
