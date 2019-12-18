@@ -37,12 +37,11 @@ PowerDNS Recursor 4.2.0へバージョンアップします。
 
 ### 詳細
 
-#### NSEC/NSEC3
+#### Type Bit Maps
 
 DNSSECおいてドメイン名もしくはRRSetが存在しないことを証明するために、NSECリソースレコードが導入されました。
-NSECレコードのType Bit Mapsフィールドでは、Ownerに存在するリソースレコードタイプを示します。
-
-Type Bit MapsのWire Formatは、単純なリソースレコードタイプ(16bit)の配列ではなく、サイズがより小さくなるように定義されています
+NSECレコードのType Bit Mapsフィールドでは、Ownerに存在するリソースレコードタイプを示ししています。
+Type Bit MapsのWire Formatは、単純なリソースレコードタイプ(16bit)の配列ではなくサイズがより小さくなるように定義されています。
 詳細は[BoFの発表資料](https://speakerdeck.com/sischkg/nsec3falsetype-bit-mapsnituite?slide=5)を参照してください。
 
 #### PowerDNS RecursorのType Bit Mapsの実装
@@ -128,10 +127,8 @@ NSECのテキスト表現の例
 example.com. IN NSEC  dns01.example.com. A NS SOA MX RRSIG NSEC DNSKEY
 ```
 
-Type Bit MapsのWire Formatはサイズが小さくなるように定義されていますが、
-NSECレコードのテキスト表現ではサイズについて考慮されていません。そこで
-先ほどPowerDNS Recursorの説明で利用したType Bit Mapsのすべてのbitを1にしたNSECレコードを、
-テキスト形式に変換すると約640KBの非常に大きなものになります。
+Type Bit MapsのWire Formatはサイズが小さくなるように定義されていますが、NSECレコードのテキスト表現ではサイズについて考慮されていません。
+そこで先ほどPowerDNS Recursorの説明で利用したType Bit Mapsのすべてのbitを1にしたNSECレコードを、テキスト形式に変換すると約640KBの非常に大きなものになります。
 
 ```text
 example.com. 3600 IN NSEC a.example.com. RESERVED0 A NS MD MF CNAME SOA MB MG MR NULL WKS PTR HINFO MINFO MX TXT RP AFSDB X25 ISDN RT NSAP NSAP-PTR SIG KEY PX GPOS AAAA LOC NXT EID NIMLOC SRV ATMA NAPTR KX CERT A6 DNAME SINK OPT APL DS SSHFP IPSECKEY RRSIG NSEC DNSKEY DHCID NSEC3 NSEC3PARAM TLSA SMIMEA TYPE54 HIP NINFO RKEY TALINK CDS CDNSKEY OPENPGPKEY CSYNC
