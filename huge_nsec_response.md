@@ -41,8 +41,6 @@ PowerDNS Recursor 4.2.0へバージョンアップします。
 
 DNSSECおいてドメイン名もしくはRRSetが存在しないことを証明するために、NSECリソースレコードが導入されました。
 NSECレコードのType Bit Mapsフィールドでは、Ownerに存在するリソースレコードタイプを示ししています。
-Type Bit MapsのWire Formatは、単純なリソースレコードタイプ(16bit)の配列ではなくサイズがより小さくなるように定義されています。
-詳細は[BoFの発表資料](https://speakerdeck.com/sischkg/nsec3falsetype-bit-mapsnituite?slide=5)を参照してください。
 
 #### PowerDNS RecursorのType Bit Mapsの実装
 
