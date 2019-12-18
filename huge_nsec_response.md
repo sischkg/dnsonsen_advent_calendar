@@ -1,246 +1,196 @@
-# PowerDNS Recursor 4.0.8 and 4.1.1 are killed by OOM, when responses with huge NSEC bitmap is received.
+# NSEC/NSEC3のType Bit Mapsについて
 
-## Overview
+本投稿は、2019年11月28日のDNS BoFでの発表内容と同じものです。
 
-PowerDNS Recursor 4.0.8 and 4.1.1 limit the count of RR cache entries,
-but they does not limit RR cache size.
-Also, crafted NSEC records that include huge bitmap field consume much memory.
-Therefor memory usage of pdns_recursor increases by crafted response, finally
-pdns_recursor is killed by OOM.
+## PowerDNS RecursorのType Bit Mapsの実装に起因するメモリ使用量の問題
 
+### 概要
 
-##  Environment
+* PowerDNS Recursor 4.2.0未満には、NSEC/NSEC3のType Bit Mapの実装に問題があり、
+  特殊なリソースレコードをキャッシュすると想定以上のメモリ（リソースレコードあたり3MB)を消費します。
+* PowerDNS Recursorにはキャッシュのエントリ数を制限する機能はありますが、
+  メモリ使用量でキャッシュを制限する機能はありません。
+* PowerDNS Recursorに特殊なリソースレコードを多くキャッシュさせることで、
+  管理者の想定以上にメモリを消費しサービスのパフォーマンスの低下や停止を
+  発生させることができます。
 
-same as cve-2017-15120 report.
+### 影響
 
-### IP Addresses of each servers.
+攻撃者は特殊なNSEC/NSECレコードを応答する攻撃用のドメイン名とその権威サーバを用意し、
+攻撃対象のPowerDNS Recursorへ攻撃用のドメイン名の問い合わせを送信し続けることで、
+攻撃対象のサーバのメモリ使用量を増加させることができます。
 
-* root DNS server:                192.168.33.100/24
-* malicious aurhoritative server: 192.168.33.101/24
-* victim full service resolver:   192.168.33.102/24
+### 対象
 
-### OS, Software of each servers.
+* PowerDNS Recursor 4.2.0未満(DNSSEC Validationの有無は関係ありません)
 
-#### root DNS server
+### 回避策
 
-* OS: CentOS 7.4 x86_64 on VirtualBox VM
-* DNS: bind
+リソースレコードあたり3MBのメモリを消費する前提で、
+キャッシュのエントリ数を制限します([max-cache-entries](https://doc.powerdns.com/recursor/settings.html#setting-max-cache-entries) )。
+ただし、キャッシュのエントリ数が少なるなるためヒット率が低下します。
 
-#### Malicious authoritative server
+### 対策
 
-* OS: CentOS 7.4 x86_64 on VirtualBox VM
+PowerDNS Recursor 4.2.0へバージョンアップします。
 
-#### victim full service resolver
+### 詳細
 
-* OS: CentOS 7.4 x86_64 on VirtualBox VM
-* Memory: 4GB
-* SWAP: no
-* DNS: PowerDNS Recursor 4.0.8 / 4.1.1
+#### NSEC/NSEC3
 
-## Setup steps of Environment
+DNSSECおいてドメイン名もしくはRRSetが存在しないことを証明するために、NSECリソースレコードが導入されました。
+NSECレコードのType Bit Mapsフィールドでは、Ownerに存在するリソースレコードタイプを示します。
 
-### root servers
+#### Type Bit MapsのWire Format
 
-Install CentOS 7.4 from install ISO image.
+Type Bit MapsのWire Formatは、単純なリソースレコードタイプ(16bit)の配列ではなく、サイズがより小さくなるように定義されています
+([4.1.2.  The Type Bit Maps Field](https://tools.ietf.org/html/rfc4034#section-4.1.2) )。
 
-Set IP address VM to 192.168.33.100/24.
+#### PowerDNS RecursorのType Bit Mapsの実装
 
-Set firewalld.
+4.2.0未満のPowerDNS Recursorでは、Type Bit Mapsの値をC++のSTLのstd::set<uint16_t>で保持しています
+([class NSECRecordContent](https://github.com/PowerDNS/pdns/blob/rec-4.1.14/pdns/dnsrecords.hh#L506) )。
+Type Bit MapsのTypeの1bitが、std::set<uinit16_t>の1エントリに対応しています。
 
-```
-    # firewall-cmd --zone=public --add-service=dns --permanent
-    # firewall-cmd --reload
-```
+```c++
+class NSECRecordContent : public DNSRecordContent
+{
+public:
+  static void report(void);
 
-Install Bind.
+// snip
 
-```
-    # yum install bind bind-utils
-```
-
-Upload and extract test-files.tar.gz
-
-```
-    # cd /tmp
-    # tar xzf /path/to/test-files.tar.gz
- ```
-
- Copy named.conf and root zone file.
-
-```
-    # cp /tmp/test-files/root.named.conf /etc/named.conf
-    # cp /tmp/test-files/root.zone       /var/named/root.zone
-    # chmod 644 /var/named/root.zone
+DNSName d_next;
+  std::set<uint16_t> d_set;
+private:
+};
 ```
 
-Start named.
+C++(CentOS 7.6のGCC 4.8.5)においてstd::setはRed-Black treeを用いて実装しているため、
+std::setの一つのエントリには、Colorとparent node、left, right nodeへのポインタが付属します。
 
-```
-    # systemctl start  named
-    # systemctl enable named
-```
+```c++
+  struct _Rb_tree_node_base
+  {
+    typedef _Rb_tree_node_base* _Base_ptr;
+    typedef const _Rb_tree_node_base* _Const_Base_ptr;
 
-#### Malicious authoritative server
-
-Install CentOS 7.4 from install ISO image.
-
-Set IP address to 192.168.33.101/24.
-
-Set firewalld
-
-```
-    # firewall-cmd --zone=public --add-service=dns --permanent
-    # firewall-cmd --reload
+    _Rb_tree_color      _M_color;
+    _Base_ptr           _M_parent;
+    _Base_ptr           _M_left;
+    _Base_ptr           _M_right;
 ```
 
-Install Build tools.
+Type Bit Mapsの全てのbitを1にするとWire Formatでは8704bytesになりますが、PowerDNS Recursor上ではおよそ3MB程度になります。
+そのため通常の署名済みゾーンのNSECレコードでは問題になりませんが、故意に多くのbitを1にしたNSECレコードをキャッシュした場合、
+PowerDNS Recursor のメモリ使用量は非常に大きくなります。
 
-```
-    # yum install epel-release
-    # yum install gcc-c++ boost-devel wget perl yaml-cpp-devel bind-utils
+```text
+Wire Format
+size of Type Bit Map = bit map count x ( Window Block + Bitmap Length + Bitmap ) bytes
+                     = 256 x ( 1 + 1 + 32 ) bytes
+                     = 8704 bytes
 
-    # wget https://cmake.org/files/v3.10/cmake-3.10.0-Linux-x86_64.sh
-    # sh cmake-3.10.0-Linux-x86_64.sh --skip-license --prefix=/usr/local
-```
-
-Install openssl 1.0.1 from source file.
-
-```
-    # wget https://www.openssl.org/source/openssl-1.1.0g.tar.gz
-    # tar xzf openssl-1.1.0g.tar.gz
-    # cd openssl-1.1.0g
-    # ./config
-    # make
-    # make install
+PowerDNS Recursor
+size of Type Bit Map = ( node size of red-black tree ) * 65536 + Overhead bytes
+                     = 40 x 65535 + Overhead bytes
+                     = 2,621,400 + Overhead bytes
+                     ~ 3MB
 ```
 
-Upload and extract test-tools.tar.gz.
+sample code to estimate memory usage: [set-uint16_t-x100.cpp](https://github.com/sischkg/huge_nsec_response/blob/master/set-uint16_t-x100.cpp)
 
-```
-    # cd /tmp
-    # tar xzf /path/to/test-tools.tar.gz
-    # cd test-tools
-    # OPENSSL_ROOT_DIR=/usr/local/ssl cmake .
-    # make
-```
+#### PowerDNS Recursorでのキャッシュの制限
 
-Start DNS service foreground.
+BINDやUnboundでは、リソースレコードのキャッシュの量をメモリ使用量で制限することが出来ますが、
+PowerDNS Recursorではキャッシュ内のリソースレコードの数で制限します。PowerDNS Recursorで、
+NSECのメモリ使用量(リソースレコードあたり3MB)に従ってエントリ数を制限すると、キャッシュを
+多く持つことが出来なくなり、キャッシュヒット率が低下します。
 
-```
-    # ./bin/huge_nsec_response
-```
+#### PowerDNS 4.2.0での変更点
 
-Login to authoritative server from other terminal, and check response of huge_nsec_response.
+以下のPull Requestがマージされ、PowerDNS Recursor 4.2.0にて修正されています。
 
-```
-    $ dig \@127.0.0.1 www.example.com nsec +norec
-    
-    snip
-    
-    TYPE65531 TYPE65532 KEYDATA TYPE65534
-    
-    ;; Query time: 149 msec
-    ;; SERVER: 127.0.0.1#53(127.0.0.1)
-    ;; WHEN: Tue Jan 23 21:01:21 JST 2018
-    ;; MSG SIZE  rcvd: 8783
+https://github.com/PowerDNS/pdns/pull/7345
 
-```
+PowerDNS 4.2.0ではBit Map Types内のTypeが200に達した場合、それを保存するコンテナを `std::set<uint16_t>` から `std::bitset` へ変更します。
 
-### victim full service resolver
+##  Type Bit Mapsのテキスト表現について
 
-Install CentOS 7.4 from install ISO image.
+リソースレコードのテキスト表現は、以下のような場面で利用されます。
 
-Set IP address to 192.168.33.102/24.
+* dig/drillなどの出力
+* ゾーンファイル
+* キャッシュのダンプ
 
-Set firewalld
+NSECのテキスト表現の例
 
-```
-    # firewall-cmd --zone=public --add-service=dns --permanent
-    # firewall-cmd --reload
+```text
+example.com. IN NSEC  dns01.example.com. A NS SOA MX RRSIG NSEC DNSKEY
 ```
 
-Install Build tools.
+Type Bit MapsのWire Formatはサイズが小さくなるように定義されていますが、
+NSECレコードのテキスト表現ではサイズについて考慮されていません。そこで
+先ほどPowerDNS Recursorの説明で利用したType Bit Mapsのすべてのbitを1にしたNSECレコードを、
+テキスト形式に変換すると約640KBの非常に大きなものになります。
 
-```
-    # yum install gcc-c++ boost-devel openssl-devel lua-devel wget bzip2 bind-utils
-```
+```text
+example.com. 3600 IN NSEC a.example.com. RESERVED0 A NS MD MF CNAME SOA MB MG MR NULL WKS PTR HINFO MINFO MX TXT RP AFSDB X25 ISDN RT NSAP NSAP-PTR SIG KEY PX GPOS AAAA LOC NXT EID NIMLOC SRV ATMA NAPTR KX CERT A6 DNAME SINK OPT APL DS SSHFP IPSECKEY RRSIG NSEC DNSKEY DHCID NSEC3 NSEC3PARAM TLSA SMIMEA TYPE54 HIP NINFO RKEY TALINK CDS CDNSKEY OPENPGPKEY CSYNC
 
-Install PowerDNS Recursor 4.1.1.
+...
 
-```
-    # wget https://downloads.powerdns.com/releases/pdns-recursor-4.1.1.tar.bz2
-    # tar xjf pdns-recursor-4.1.1.tar.bz2
-    # cd pdns-recursor-4.1.1
-    # ./configure
-    # make
-    # make install
+TYPE65530 TYPE65531 TYPE65532 TYPE65533 TYPE65534 TYPE65535
 ```
 
-Upload and extract test-files.tar.gz.
+[NSECレコード全体](https://raw.githubusercontent.com/sischkg/huge_nsec_response/master/nsec_response.txt)
 
-```
-    # cd /tmp
-    # tar xzf /path/to/test-files.tar.gz
-```
+### ゾーン転送で受信したゾーン
 
-Copy recursor.conf and hints file.
+BINDでは、ゾーン転送で受信したゾーンのデータを次のファイル形式で保存します。
 
-```
-    # cp /tmp/test-files/recursor.conf /usr/local/etc
-    # cp /tmp/test-files/root.hints    /usr/local/etc
-```
+* 9.8.0未満: テキスト
+* 9.8.0以上で”masterfile-format text;”: テキスト
+* 9.8.0以上で”masterfile-format”未指定: raw
 
-Start pdns_recursor.
+1000個のNSECレコードを持つゾーンを転送すると、スレーブ側では以下のサイズのファイルが作成されます。
 
-```
-    # swapoff -a
-    # /usr/local/sbin/pdns_recursor
-```
+* テキスト形式:　645 MB
+* raw形式:      8.8 MB
 
-Login to authoritative server(192.168.33.101) or other Linux machine from other terminal.
-Send queries to pdns_recursor.
+## キャッシュのダンプ
 
-```
-    $ i=0 ; while sleep 0.1 ; do dig @192.168.33.102 $i.example.com nsec +rec +tcp +short ; i=`expr $i + 1` ; done
-```
+フルリゾルバでは、以下のようにキャッシュの内容を出力することができます。
 
-Wait few minutes and check pdns_recurser process.
+* BIND: `rndc dumpdb`を実行すると、namedは`named.conf`の`dump-file`にて指定されたパスに、ゾーンファイル形式のキャッシュデータを保存します。
+* Unbound: `unbound-control dump_cache`を実行すると、`unbound`は`unbound-control`へゾーンファイル形式のキャッシュデータを送信し、`unbound-control`はそれを標準出力へ出力します。
+* PowerDNS Recursor: `rec_control dump-cache /tmp/dumpdb.txt`を実行すると、`pdns_recursor`は`rec_control`の引数で指定したパスへ、ゾーンファイル形式のキャッシュデータを保存します。
 
-```
-    # /usr/local/sbin/pdns_recursor
-    Jan 24 02:35:47 PowerDNS Recursor 4.1.1 (C) 2001-2017 PowerDNS.COM BV
-    Jan 24 02:35:47 Using 64-bits mode. Built using gcc 4.8.5 20150623 (Red Hat 4.8.5-16) on Jan 23 2018 21:31:47 by root@resolver.
-    Jan 24 02:35:47 PowerDNS comes with ABSOLUTELY NO WARRANTY. This is free software, and you are welcome to redistribute it according to the terms of the GPL version 2.
-    Jan 24 02:35:47 Reading random entropy from '/dev/urandom'
-    Jan 24 02:35:47 NOT using IPv6 for outgoing queries - set 'query-local-address6=::' to enable
-    Jan 24 02:35:47 Only allowing queries from: 127.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 169.254.0.0/16, 192.168.0.0/16, 172.16.0.0/12, ::1/128, fc00::/7, fe80::/10
-    Jan 24 02:35:47 PowerDNS Recursor itself will distribute queries over threads
-    Jan 24 02:35:47 Inserting rfc 1918 private space zones
-    Jan 24 02:35:47 Listening for UDP queries on 0.0.0.0:53
-    Jan 24 02:35:47 Enabled TCP data-ready filter for (slight) DoS protection
-    Jan 24 02:35:47 Listening for TCP queries on 0.0.0.0:53
-    Jan 24 02:35:47 Insufficient number of filedescriptors available for max-mthreads*threads setting! (4096 < 4121), reducing max-mthreads to 2035
-    Jan 24 02:35:47 Launching 3 threads
-    Jan 24 02:35:47 Done priming cache with root hints
-    Jan 24 02:35:47 Enabled 'epoll' multiplexer
-    Jan 24 02:35:47 Done priming cache with root hints
-    Jan 24 02:35:47 Done priming cache with root hints
-    Jan 24 02:35:48 Could not retrieve security status update for '4.1.1' on 'recursor-4.1.1.security-status.secpoll.powerdns.com', RCODE = Server Failure
-    Killed
+1000個のNSECレコードをキャッシュさせた状態でそれをダンプすると次のサイズのファイルが作成されます。
 
+* BIND:              約640MB
+* Unbound:           約1.1MB
+* PowerDNS Recursor: 約1.3GB
+
+UnboundではType Bit Mapsをすべて出力しないため、ダンプファイルが小さくなります。
+
+```text
+1.example.com.  3215    IN      NSEC    a.1.example.com. A NS MD MF CNAME SOA MB .... TYPE152 TYPE1;rrset 10415 1 1 7 0
 ```
 
-See /var/log/messages.
+PowerDNS Recursorでは、
 
-```
-    Jan 24 02:43:00 resolver kernel: pdns_recursor invoked oom-killer: gfp_mask=0x280da, order=0, oom_score_adj=0
-    Jan 24 02:43:00 resolver kernel: pdns_recursor cpuset=/ mems_allowed=0
-    Jan 24 02:43:00 resolver kernel: CPU: 0 PID: 17966 Comm: pdns_recursor Not tainted 3.10.0-693.el7.x86_64 #1
-    Jan 24 02:43:00 resolver kernel: Hardware name: innotek GmbH VirtualBox/VirtualBox, BIOS VirtualBox 12/01/2006
-    Jan 24 02:43:00 resolver kernel: ffff8800c1599fa0 00000000a7376734 ffff8800d7d17a70 ffffffff816a3d91
-    Jan 24 02:43:00 resolver kernel: ffff8800d7d17b00 ffffffff8169f186 ffff8800d7d17b08 ffffffff812b7c3b
-    Jan 24 02:43:00 resolver kernel: 0000000000000001 ffff8800d7d17aa8 ffffffff00000202 fffeefff00000000
-```
+* キャッシュをダンプ中、pdns_recusorが応答しない時があります。
+* Threadごとにキャッシュを持っているため、同じレコードが複数回出力されることでダンプファイルが大きくなります。
 
+> rec_control(https://doc.powerdns.com/recursor/manpages/rec_control.1.html)
+> Dumps the entire cache to FILENAME. This file should not exist already, PowerDNS will refuse to overwrite it. While dumping, the recursor will not answer questions.
+> Typical PowerDNS Recursors run multiple threads, therefore you’ll see duplicate, different entries for the same domains. The negative cache is also dumped to the same file. The per-thread positive > and negative cache dumps are separated with an appropriate comment.
 
+## まとめ
+
+* PowerDNS Recursorは特殊なNSEC/NSEC3をキャッシュするときのメモリ使用量が大きくなります。
+* エントリ数制限値が大きい場合は、メモリを使い切る可能性があります。
+* Type Bit Mapsのテキスト表現は、非常に大きなサイズになる場合があります。
+* そのためゾーン転送後のゾーンファイルや、キャッシュのダンプファイルのサイズも大きくなります。
+* ただし、特殊なNSEC/NSEC3を作成して実際に実行する人が存在するかは不明です。
 
