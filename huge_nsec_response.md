@@ -1,6 +1,7 @@
 # NSEC/NSEC3のType Bit Mapsについて
 
-本投稿は、2019年11月28日のDNS BoFでの発表内容と同じものです。
+本投稿は、2019年11月28日の[DNS BoFでの発表内容](https://speakerdeck.com/sischkg/nsec3falsetype-bit-mapsnituite)と同じものです。
+また、DNS温泉番外編2のLTの最後のスライド(未公開)の詳細でもあります。
 
 ## PowerDNS RecursorのType Bit Mapsの実装に起因するメモリ使用量の問題
 
@@ -41,10 +42,8 @@ PowerDNS Recursor 4.2.0へバージョンアップします。
 DNSSECおいてドメイン名もしくはRRSetが存在しないことを証明するために、NSECリソースレコードが導入されました。
 NSECレコードのType Bit Mapsフィールドでは、Ownerに存在するリソースレコードタイプを示します。
 
-#### Type Bit MapsのWire Format
-
 Type Bit MapsのWire Formatは、単純なリソースレコードタイプ(16bit)の配列ではなく、サイズがより小さくなるように定義されています
-([4.1.2.  The Type Bit Maps Field](https://tools.ietf.org/html/rfc4034#section-4.1.2) )。
+詳細は[BoFの発表資料](https://speakerdeck.com/sischkg/nsec3falsetype-bit-mapsnituite?slide=5)を参照してください。
 
 #### PowerDNS RecursorのType Bit Mapsの実装
 
